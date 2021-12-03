@@ -1,4 +1,4 @@
-#include "noclip.h"
+#include "../noclip.h"
 
 void printstuff()
 {
