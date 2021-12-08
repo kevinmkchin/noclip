@@ -15,7 +15,7 @@ The purpose of console commands is to be able to execute compiled C++ functions 
 void set_cheats(int mode) { ... }
 ...
 console.bind_cmd("sv_cheats", set_cheats);
-console.execute("sv_cheats 1", std::cout);
+console.execute("sv_cheats 1", std::cout); // once executed, calls set_cheats with mode 1
 ```
 
 ### Console Variables
