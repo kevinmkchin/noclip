@@ -1,11 +1,18 @@
-#ifndef NOCLIP_CONSOLE_H
-#define NOCLIP_CONSOLE_H
-
 /*
 
 noclip.h
 
-By Kevin Chin 2021
+                                 oooo   o8o
+                                `888   `"'
+ooo. .oo.    .ooooo.   .ooooo.   888  oooo  oo.ooooo.
+`888P"Y88b  d88' `88b d88' `"Y8  888  `888   888' `88b
+ 888   888  888   888 888        888   888   888   888
+ 888   888  888   888 888   .o8  888   888   888   888
+o888o o888o `Y8bod8P' `Y8bod8P' o888o o888o  888bod8P'
+                                             888
+                                            o888o
+
+By Kevin Chin 2021 (https://kevch.in/)
 
 Single-header C++ library providing a console backend for parsing and
 interpreting commands and arguments from an input stream.
@@ -95,6 +102,8 @@ about the type of the variable when we want to mutate it - we just need
 to give the stored behaviour an input to read from.
 
 */
+#ifndef NOCLIP_CONSOLE_H
+#define NOCLIP_CONSOLE_H
 
 #include <iostream>
 #include <sstream>
