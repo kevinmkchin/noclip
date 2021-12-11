@@ -3,12 +3,14 @@
 
 /*
 
-noclip.h (WORK IN PROGRESS)
+noclip.h
 
 By Kevin Chin 2021
 
 Single-header C++ library providing a console backend for parsing and
 interpreting commands and arguments from an input stream.
+
+Documentation may be lacking as this library is constantly being worked on.
 
 Uses C++11 features (e.g. parameter pack, lambdas) and a ton of standard
 library goodies: <iostream>, <sstream>, <functional>, <unordered_map> from 
@@ -72,6 +74,9 @@ while(true)
     console.execute(std::cin, std::cout);
 }
 ```
+Because we are using input and output streams, this console works with ANY
+variable or parameter types as long as the type has overloaded the input
+and output operators (the >> and << operators).
 
 IMPLEMENTATION DETAILS:
 By leveraging the power of lambdas (anonymous functions) and templates, 
@@ -320,7 +325,7 @@ namespace noclip
                     auto v_iter = cvar_setter_lambdas.find(vid);
                     if(v_iter == cvar_setter_lambdas.end())
                     {
-                        os << "NOCLIP::CONSOLE ERROR: There is no bound variable with id ''." << vid << std::endl;
+                        os << "NOCLIP::CONSOLE ERROR: There is no bound variable with id '" << vid << "'." << std::endl;
                         return;
                     }
                     else
@@ -337,7 +342,7 @@ namespace noclip
                     auto v_iter = cvar_getter_lambdas.find(vid);
                     if(v_iter == cvar_getter_lambdas.end())
                     {
-                        os << "NOCLIP::CONSOLE ERROR: There is no bound variable with id ''." << vid << std::endl;
+                        os << "NOCLIP::CONSOLE ERROR: There is no bound variable with id '" << vid << "'." << std::endl;
                         return;
                     }
                     else
@@ -359,8 +364,8 @@ namespace noclip
                     os << std::endl;
                     os << "Get help" << std::endl;
                     os << "help : outputs noclip::console help" << std::endl;
-                    os << "listcvars : outputs info about every bound console variable" << std::endl;
-                    os << "listcmd : outputs info about every bound console command" << std::endl;
+                    os << "listCVars : outputs info about every bound console variable" << std::endl;
+                    os << "listCmds : outputs info about every bound console command" << std::endl;
                     os << std::endl;
                     os << "Perform arithematic and modulo operations" << std::endl;
                     os << "(+, -, *, /, %) <lhs> <rhs>" << std::endl;
@@ -379,16 +384,36 @@ namespace noclip
                     */
                 };
 
-            cmd_table["listcvars"] =
-                [](std::istream& is, std::ostream& os)
+            cmd_table["listCVars"] =
+                [this](std::istream& is, std::ostream& os)
                 {
+                    if(cvar_getter_lambdas.size() == 0)
+                    {
+                        os << "There are no bound console variables..." << std::endl;
+                        return;
+                    }
 
+                    os << "Bound console variable names:" << std::endl;
+                    for (auto& it: cvar_getter_lambdas)
+                    {
+                        os << "   " << it.first << std::endl;
+                    }
                 };
 
-            cmd_table["listcmd"] =
-                [](std::istream& is, std::ostream& os)
+            cmd_table["listCmds"] =
+                [this](std::istream& is, std::ostream& os)
                 {
+                    if(cvar_getter_lambdas.size() == 0)
+                    {
+                        os << "There are no bound console commands..." << std::endl;
+                        return;
+                    }
 
+                    os << "Bound console command names:" << std::endl;
+                    for (auto& it: cmd_table)
+                    {
+                        os << "   " << it.first << std::endl;
+                    }
                 };
 
             cmd_table["+"] =
