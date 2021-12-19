@@ -108,7 +108,7 @@ to give the stored behaviour an input to read from.
 #include <iostream>
 #include <sstream>
 #include <functional>
-#include <unordered_map>
+#include <map>
 
 namespace noclip
 {
@@ -121,7 +121,7 @@ namespace noclip
             bind_builtin_commands();
         }
 
-        typedef std::unordered_map<std::string, console_function_t> function_table_t;
+        typedef std::map<std::string, console_function_t> function_table_t;
         function_table_t cmd_table;
         function_table_t cvar_setter_lambdas;
         function_table_t cvar_getter_lambdas;
@@ -412,7 +412,7 @@ namespace noclip
             cmd_table["listCmds"] =
                 [this](std::istream& is, std::ostream& os)
                 {
-                    if(cvar_getter_lambdas.size() == 0)
+                    if(cmd_table.size() == 0)
                     {
                         os << "There are no bound console commands..." << std::endl;
                         return;
