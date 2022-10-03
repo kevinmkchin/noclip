@@ -414,8 +414,12 @@ namespace noclip
                     }
 
                     os << "Bound console command names:" << std::endl;
-                    for (auto& it: cmd_table)
+                    for (auto& it : cmd_table)
                     {
+                        if (it.first == "+" || it.first == "-" || it.first == "*" || it.first == "/" 
+                            || it.first == "%" || it.first == "set" || it.first == "get" || it.first == "help" 
+                            || it.first == "listCmds" || it.first == "listCVars") continue;
+
                         os << "   " << it.first << std::endl;
                     }
                 };
