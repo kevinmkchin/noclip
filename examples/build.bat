@@ -1,2 +1,2 @@
 
-cl console_test.cpp /EHsc
+cl example.cpp /EHsc
