@@ -2,39 +2,20 @@
 
 noclip.h
 
-                                 oooo   o8o
-                                `888   `"'
-ooo. .oo.    .ooooo.   .ooooo.   888  oooo  oo.ooooo.
-`888P"Y88b  d88' `88b d88' `"Y8  888  `888   888' `88b
- 888   888  888   888 888        888   888   888   888
- 888   888  888   888 888   .o8  888   888   888   888
-o888o o888o `Y8bod8P' `Y8bod8P' o888o o888o  888bod8P'
-                                             888
-                                            o888o
+Single header C++11 library for parsing and interpreting commands
+and arguments from an input stream. Can be used to make REPL-like
+environments e.g. drop-down console.
 
-By Kevin Chin 2021 (https://kevch.in/)
+Uses C++11 features (e.g. parameter pack, anonymous functions).
 
-Single-header C++ library providing a console backend for parsing and
-interpreting commands and arguments from an input stream.
+Type information is baked into the anonymous functions for setting/getting variables
+and invoking commands. Type information is used to reify arguments at execution time.
 
-Documentation may be lacking as this library is still being worked on.
+For input and output, noclip::console uses std::istream and std::ostream. This
+makes parsing of custom types possible by overloading the insertion and extraction
+operators.
 
-Uses C++11 features (e.g. parameter pack, lambdas) and a ton of standard
-library goodies: <iostream>, <sstream>, <functional>, <unordered_map> from 
-C++11 Standard Library.
-
-noclip::console is essentially a shell for your programs to call functions
-or mutate variables based on input during runtime. The idea is to provide 
-a very easy interface to a sophisticated console backend (shell) which can 
-be used to build things like in-game drop-down consoles for games.
-Examples: 
-https://developer.valvesoftware.com/wiki/Developer_Console 
-https://quake.fandom.com/wiki/Console_(Q1)
-noclip::console can be used for any program, not just games. If you want to
-be able to change variables or call certain functions based on text input,
-noclip::console will be useful.
-
-QUICK INTERFACE:
+USAGE:
     function    | example
     ------------|-----------------------------------------
     bind_cvar   | console.bind_cvar("health", &health);
@@ -53,54 +34,6 @@ QUICK INTERFACE:
 CREATING A CONSOLE:
     noclip::console console;
 
-USAGE:
-
-All you need to understand is that there are CONSOLE VARIABLES 
-(CVar https://en.wikipedia.org/wiki/CVAR) and CONSOLE COMMANDS (Cmd). 
-Bind Variables and Functions to CVars and Cmds during runtime. Once bound, 
-these variables can be mutated and these functions can be called all via 
-commands from an input stream. e.g. std::cin or an input stream from a 
-visual console GUI.
-
-Consider the following:
-```
-int hp = 100;
-console.bind_cvar("health", &hp); // binds 'hp' as a CVar with id 'health'
-```
-then if we execute the command "set health 75", hp will change to 75.
-
-For input and output, noclip::console uses std::istream and std::ostream. This
-makes noclip::console very flexible for any kind of program. As long as there
-is an input stream and an output stream, noclip::console will work. You can 
-convert a string into a sstream (type of istream) and use that as the input.
-You can also grab the output stream and then convert that into a string. 
-You can even do something like:
-```
-while(true)
-{
-    console.execute(std::cin, std::cout);
-}
-```
-Because we are using input and output streams, this console works with ANY
-variable or parameter types as long as the type has overloaded the input
-and output operators (the >> and << operators).
-
-IMPLEMENTATION DETAILS:
-By leveraging the power of lambdas (anonymous functions) and templates, 
-this library manages to implement a very sophisticated backend in very
-few lines of code.
-
-By using lambdas, we can capture the behaviour of commands. We can 
-look up the lambda/behaviour associated with a given command id and then
-invoke that behaviour.
-
-Another way lambdas are used is to be able to set and get variables
-without knowing their type. Instead of storing the memory address of 
-a given variable, we instead store the behaviour (using a lambda) of 
-mutating that variable given an input. This way, we don't need to know 
-about the type of the variable when we want to mutate it - we just need 
-to give the stored behaviour an input to read from.
-
 */
 #ifndef NOCLIP_CONSOLE_H
 #define NOCLIP_CONSOLE_H
@@ -109,6 +42,10 @@ to give the stored behaviour an input to read from.
 #include <sstream>
 #include <functional>
 #include <map>
+
+#ifndef NOCLIP_MULTIPLE_COMMANDS_DELIMITER
+#define NOCLIP_MULTIPLE_COMMANDS_DELIMITER ';'
+#endif // NOCLIP_MULTIPLE_COMMANDS_DELIMITER
 
 namespace noclip
 {
@@ -137,7 +74,7 @@ namespace noclip
                     if(is.fail())
                     {
                         const char* vt = typeid(T).name();
-                        os << "NOCLIP::CONSOLE ERROR: Type mismatch. CVar '" << vid 
+                        os << "CONSOLE ERROR: Type mismatch. CVar '" << vid 
                         << "' is of type '" << vt << "'." << std::endl;
 
                         is.clear();
@@ -162,12 +99,13 @@ namespace noclip
                 [this, f_ptr](std::istream& is, std::ostream& os)
                 {
                     auto std_fp = std::function<void(Args ...)>(f_ptr);
-                    this->materialize_and_execute<Args ...>(is, os, std_fp);
+                    this->reify_and_execute<Args ...>(is, os, std_fp);
                 };
         }
 
-        template<typename O, typename ... Args> /* Use :: syntax e.g. bind_cmd("name", &A::f, &a) */
-        void bind_cmd(const std::string& cid, void(O::*f_ptr)(Args ...), O* omem)
+        /* e.g. bind_cmd("myObjectMethod", &MyObject::f, &myObjectInstance) */
+        template<typename T, typename ... Args>
+        void bind_cmd(const std::string& cid, void(T::*f_ptr)(Args ...), T* omem)
         {
             std::function<void(Args...)> std_fp =
                 [f_ptr, omem](Args ... args)
@@ -178,7 +116,7 @@ namespace noclip
             cmd_table[cid] =
                 [this, std_fp](std::istream &is, std::ostream &os)
                 {
-                    this->materialize_and_execute<Args...>(is, os, std_fp);
+                    this->reify_and_execute<Args...>(is, os, std_fp);
                 };
         }
 
@@ -213,24 +151,43 @@ namespace noclip
 
         void execute(std::istream& input, std::ostream& output)
         {
-            std::string cmd_id;
-            input >> cmd_id;
-
-            auto cmd_iter = cmd_table.find(cmd_id);
-            if(cmd_iter == cmd_table.end())
+            while (!input.eof())
             {
-                output << "NOCLIP::CONSOLE ERROR: Input '" << cmd_id << "' isn't a command." << std::endl;
-                return;
-            }
+                std::string cmd;
 
-            (cmd_iter->second)(input, output);
+                for (char c = 0; !input.eof(); c = 0)
+                {
+                    input.get(c);
+                    if (c == 0 || c == NOCLIP_MULTIPLE_COMMANDS_DELIMITER)
+                        break;
+                    cmd.push_back(c);
+                }
+
+                if (!cmd.empty())
+                {
+                    std::stringstream cmdstream;
+                    cmdstream.str(cmd);
+
+                    std::string cmd_id;
+                    cmdstream >> cmd_id;
+
+                    auto cmd_iter = cmd_table.find(cmd_id);
+                    if (cmd_iter == cmd_table.end())
+                    {
+                        output << "CONSOLE ERROR: Input '" << cmd_id << "' isn't a command." << std::endl;
+                        return;
+                    }
+
+                    (cmd_iter->second)(cmdstream, output);
+                }
+            }
         }
 
         void execute(const std::string& str, std::ostream& output)
         {
-            std::stringstream line_stream;
-            line_stream.str(str);
-            execute(line_stream, output);
+            std::stringstream cmdstream;
+            cmdstream.str(str);
+            execute(cmdstream, output);
         }
 
     private:
@@ -261,30 +218,26 @@ namespace noclip
             if(is.fail())
             {
                 is.clear();
-                os << "NOCLIP::CONSOLE ERROR: Incorrect argument types." << std::endl;
+                os << "CONSOLE ERROR: Incorrect argument types." << std::endl;
                 return;
             }
             f_ptr(temps...);
         }
 
         template<typename ... Args>
-        void materialize_and_execute(std::istream& is, std::ostream& os, std::function<void(Args ...)> f_ptr)
+        void reify_and_execute(std::istream& is, std::ostream& os, std::function<void(Args ...)> f_ptr)
         {
-            read_args_and_execute(is, os, f_ptr, 
-                (materialize<typename std::remove_const<typename std::remove_reference<Args>::type>::type>())...);
+            read_args_and_execute(is, os, f_ptr,
+                (reify<typename std::remove_const<typename std::remove_reference<Args>::type>::type>())...);
         }
 
         template<typename T>
-        T materialize()
+        T reify()
         {
-            /*  This function is just to turn the arbitrary number of 
-                types into an arbitrary number of VALUES of those types. 
-                It works because we give this function (input) a type T 
-                in the form of a template and it returns (output) a 
-                default VALUE of type T. You can sort of think of this as 
-                MATERIALIZING the types into their respective default values. */
+            /*  This function is to materialize the arbitrary number of 
+                types into an arbitrary number of rvalues of those types. */
             return T();
-        } 
+        }
 
         template<typename T>
         T evaluate_argument(std::istream& is, std::ostream& os)
@@ -329,7 +282,7 @@ namespace noclip
                     auto v_iter = cvar_setter_lambdas.find(vid);
                     if(v_iter == cvar_setter_lambdas.end())
                     {
-                        os << "NOCLIP::CONSOLE ERROR: There is no bound variable with id '" << vid << "'." << std::endl;
+                        os << "CONSOLE ERROR: There is no bound variable with id '" << vid << "'." << std::endl;
                         return;
                     }
                     else
@@ -346,7 +299,7 @@ namespace noclip
                     auto v_iter = cvar_getter_lambdas.find(vid);
                     if(v_iter == cvar_getter_lambdas.end())
                     {
-                        os << "NOCLIP::CONSOLE ERROR: There is no bound variable with id '" << vid << "'." << std::endl;
+                        os << "CONSOLE ERROR: There is no bound variable with id '" << vid << "'." << std::endl;
                         return;
                     }
                     else
@@ -358,37 +311,30 @@ namespace noclip
             cmd_table["help"] =
                 [](std::istream& is, std::ostream& os)
                 {
-                    os << "-- noclip::console help --" << std::endl;
-                    os << "Set and get bound variables with" << std::endl;
-                    os << "set <cvar id> <value>" << std::endl;
-                    os << "get <cvar id>" << std::endl;
                     os << std::endl;
-                    os << "Call bound and compiled C++ functions with" << std::endl;
-                    os << "<cmd id> <arg 0> <arg 1> ... <arg n>" << std::endl;
+                    os << "-- Console Help --" << std::endl;
+                    // os << "Set and get bound variables with" << std::endl;
+                    os << "    set <cvar id> <value>" << std::endl;
+                    os << "    get <cvar id>" << std::endl;
+                    // os << std::endl;
+                    // os << "Call bound and compiled C++ functions with" << std::endl;
+                    // os << "<cmd id> <arg 0> <arg 1> ... <arg n>" << std::endl;
+                    // os << std::endl;
+                    // os << "Get help" << std::endl;
+                    os << "    help : outputs help message" << std::endl;
+                    os << "    cvars : list bound console variables" << std::endl;
+                    os << "    procs : list bound console commands" << std::endl;
                     os << std::endl;
-                    os << "Get help" << std::endl;
-                    os << "help : outputs noclip::console help" << std::endl;
-                    os << "listCVars : outputs info about every bound console variable" << std::endl;
-                    os << "listCmds : outputs info about every bound console command" << std::endl;
-                    os << std::endl;
-                    os << "Perform arithematic and modulo operations" << std::endl;
-                    os << "(+, -, *, /, %) <lhs> <rhs>" << std::endl;
-                    os << std::endl;
-                    os << "You can pass expressions as arguments" << std::endl;
-                    os << "+ (- 3 2) (* 4 5)" << std::endl;
-                    os << "set x (get y)" << std::endl;
-                    os << "-------- end help --------" << std::endl;
-
-                    /*
-                    print help about the built in commands
-
-                    general help message on how to use the console
-                    print all bound cvars and cmds
-                    and their help annoations or messages (if any exist)
-                    */
+                    // os << "Perform arithematic and modulo operations" << std::endl;
+                    // os << "(+, -, *, /, %) <lhs> <rhs>" << std::endl;
+                    // os << std::endl;
+                    // os << "You can pass expressions as arguments" << std::endl;
+                    // os << "+ (- 3 2) (* 4 5)" << std::endl;
+                    // os << "set x (get y)" << std::endl;
+                    // os << "------------" << std::endl;
                 };
 
-            cmd_table["listCVars"] =
+            cmd_table["cvars"] =
                 [this](std::istream& is, std::ostream& os)
                 {
                     if(cvar_getter_lambdas.size() == 0)
@@ -397,14 +343,15 @@ namespace noclip
                         return;
                     }
 
-                    os << "Bound console variable names:" << std::endl;
+                    os << std::endl;
                     for (auto& it: cvar_getter_lambdas)
                     {
-                        os << "   " << it.first << std::endl;
+                        os << "    " << it.first << std::endl;
                     }
+                    os << std::endl;
                 };
 
-            cmd_table["listCmds"] =
+            cmd_table["procs"] =
                 [this](std::istream& is, std::ostream& os)
                 {
                     if(cmd_table.size() == 0)
@@ -413,15 +360,16 @@ namespace noclip
                         return;
                     }
 
-                    os << "Bound console command names:" << std::endl;
+                    os << std::endl;
                     for (auto& it : cmd_table)
                     {
                         if (it.first == "+" || it.first == "-" || it.first == "*" || it.first == "/" 
                             || it.first == "%" || it.first == "set" || it.first == "get" || it.first == "help" 
-                            || it.first == "listCmds" || it.first == "listCVars") continue;
+                            || it.first == "procs" || it.first == "cvars") continue;
 
-                        os << "   " << it.first << std::endl;
+                        os << "    " << it.first << std::endl;
                     }
+                    os << std::endl;
                 };
 
             cmd_table["+"] =
@@ -470,37 +418,20 @@ namespace noclip
 
 /*
 ------------------------------------------------------------------------------
-This software is available under 2 licenses -- choose whichever you prefer.
-------------------------------------------------------------------------------
-ALTERNATIVE A - MIT License
-Copyright (c) 2021 Kevin Chin
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-------------------------------------------------------------------------------
-ALTERNATIVE B - Public Domain (www.unlicense.org)
+This software is dedicated to Public Domain (www.unlicense.org)
+
 This is free and unencumbered software released into the public domain.
 Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
 software, either in source code form or as a compiled binary, for any purpose,
 commercial or non-commercial, and by any means.
+
 In jurisdictions that recognize copyright laws, the author or authors of this
 software dedicate any and all copyright interest in the software to the public
 domain. We make this dedication for the benefit of the public at large and to
 the detriment of our heirs and successors. We intend this dedication to be an
 overt act of relinquishment in perpetuity of all present and future rights to
 this software under copyright law.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
