@@ -1,12 +1,5 @@
 #include "../noclip.h"
 
-void printstuff()
-{
-    std::cout << "pog" << std::endl;
-    std::cout << "yellow" << std::endl;
-    std::cout << "stuff" << std::endl;
-}
-
 struct A
 {
     float x = 3.1415;
@@ -41,7 +34,7 @@ int main()
     c.bind_cvar("s", &s);
     c.bind_cmd("printstuff", printstuff);
 
-    c.bind_cmd("yolo", funcwithargs);
+    c.bind_cmd("fib", fib);
 
     A a;
     c.bind_cvar("ax", &a.x);
